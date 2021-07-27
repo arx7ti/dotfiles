@@ -1,0 +1,221 @@
+#+title: My Literate Doom Emacs Configuration
+#+startup: fold noindent
+
+* No config auto-tangle
+#+BEGIN_SRC elisp
+(remove-hook 'org-mode-hook #'+literate-enable-recompile-h)
+#+END_SRC
+* Small changes to Doom and Emacs
+#+BEGIN_SRC elisp
+(setq warning-minimum-level :emergency)
+(setq +doom-dashboard-pwd-policy "~/")
+(setq projectile-ignored-projects '("/tmp"))
+(setq large-file-warning-threshold nil)
+(setq evil-escape-key-sequence nil)
+
+(remove-hook 'lispy-mode-hook #'turn-off-smartparens-mode)
+
+(defun unfill-paragraph ()
+  (interactive)
+  (mark-paragraph)
+  (next-line)
+  (fill-region (region-beginning) (region-end)))
+#+END_SRC
+* User info
+#+BEGIN_SRC elisp
+(setq user-full-name ""
+      user-mail-address "")
+#+END_SRC
+* Appearance
+#+BEGIN_SRC elisp
+;; font
+(defvar used-font "Iosevka")
+;; (defvar used-font "Fira Code")
+(setq doom-font (font-spec :family used-font :size 18))
+(add-hook! after-setting-font-hook
+           :append
+           (set-fontset-font "fontset-default" 'windows-1251 used-font)
+           (set-fontset-font "fontset-default" 'symbol "Noto Color Emoji" nil 'prepend)
+           (set-fontset-font "fontset-default" 'unicode "Noto Color Emoji" nil 'prepend))
+
+;; delims
+(add-hook 'prog-mode-hook #'rainbow-delimiters-mode-enable)
+
+;; theme
+(setq doom-gruvbox-dark-variant 'hard
+      doom-gruvbox-light-variant 'hard
+      doom-gruvbox-brighter-comments t
+      doom-gruvbox-light-brighter-comments t
+      doom-solarized-dark-brighter-comments t
+      doom-solarized-dark-brighter-text t
+      doom-solarized-dark-brighter-modeline t
+      doom-dracula-colorful-headers t
+      doom-dracula-brighter-comments t
+      doom-dracula-brighter-modeline t
+      acme-theme-black-fg t)
+(setq doom-theme 'acme)
+
+(add-hook 'doom-load-theme-hook
+          #'(lambda ()
+              (doom-themes-set-faces nil
+                '(font-lock-comment-face :slant 'italic))))
+
+(setq display-line-numbers-type 'relative)
+
+;; disable mixed-pitch-font
+(setq +zen-mixed-pitch-modes nil)
+
+;; pdf-mode midnight colors
+;; (after! acme-theme
+;;   (setq pdf-view-midnight-colors '("#000000" . "#FFFFE8"))
+;;   (add-hook 'pdf-tools-enabled-hook #'pdf-view-midnight-minor-mode))
+#+END_SRC
+* Polymode
+#+begin_src elisp
+(use-package! polymode
+  :init
+  (add-hook 'polymode-init-inner-hook #'evil-normalize-keymaps))
+
+(use-package! poly-org
+  :after polymode
+  :config
+  (setq org-edit-src-content-indentation 0
+        org-startup-indented nil
+        org-src-fontify-natively t
+        org-adapt-indentation nil))
+#+end_src
+* Company
+#+BEGIN_SRC elisp
+(setq company-idle-delay 0
+      company-minimum-prefix-length 1)
+(with-eval-after-load 'company
+  (company-flx-mode +1))
+#+END_SRC
+# * Eglot
+# #+BEGIN_SRC elisp
+# (after! eglot
+#   (defvar eglot-python-server "mspyls")
+#   (defvar eglot-python-path (executable-find "python3"))
+#   (defvar eglot-mspyls-search-paths [])
+#   (defvar eglot-python-server-dir (concat (getenv "MSPYLS") "/lib/"))
+
+#   (defclass eglot-mspyls (eglot-lsp-server) ()
+#     :documentation
+#     "MS Python Language Server.")
+
+#   (cl-defmethod eglot-initialization-options ((_server eglot-mspyls))
+#     "Pass dataPaths parameter require by intelephense."
+#     `(:interpreter
+#       (:properties
+#        (:InterpreterPath ,eglot-python-path))
+#       :searchPaths ,eglot-mspyls-search-paths
+#       :asyncStartup t
+#       :analysisUpdates t
+#       :logLevel "Error"
+#       :typeDefinitionProvider ,(concat eglot-python-server-dir "Typeshed")))
+
+#   (defun eglot--python-contact ()
+#     (interactive)
+#     (cond ((string-equal eglot-python-server "mspyls")
+#            (setq-default eglot-workspace-configuration
+#                          '((:python :autoComplete (:extraPaths nil)
+#                             :analysis ;; (:autoSearchPaths :json-false :usePYTHONPATH :json-false)
+#                             (:autoSearchPaths :json-false))))
+#            (cons 'eglot-mspyls (list (concat eglot-python-server-dir
+#                                              "Microsoft.Python.LanguageServer"))))
+#           ((string-equal eglot-python-server "pyls")
+#            (list "pyls"))))
+
+#   (setq eglot-server-programs
+#         `((rust-mode eglot-rls "rls")
+#           (python-mode ,@(eglot--python-contact))
+#           ((js-mode typescript-mode)
+#            "javascript-typescript-stdio")
+#           (sh-mode "bash-language-server" "start")
+#           (php-mode "php" "vendor/felixfbecker/language-server/bin/php-language-server.php")
+#           ((c++-mode c-mode)
+#            "ccls")
+#           ((caml-mode tuareg-mode reason-mode)
+#            "ocaml-language-server" "--stdio")
+#           (ruby-mode "solargraph" "socket" "--port" :autoport)
+#           (haskell-mode "haskell-language-server-wrapper" "--lsp")
+#           (elm-mode "elm-language-server")
+#           (kotlin-mode "kotlin-language-server")
+#           (go-mode "gopls")
+#           ((R-mode ess-r-mode)
+#            "R" "--slave" "-e" "languageserver::run()")
+#           (java-mode . eglot--eclipse-jdt-contact)
+#           (dart-mode "dart_language_server")
+#           (elixir-mode "language_server.sh")
+#           (ada-mode "ada_language_server")
+#           (scala-mode "metals-emacs")
+#           ((tex-mode context-mode texinfo-mode bibtex-mode)
+#            "digestif")
+#           (erlang-mode "erlang_ls" "--transport" "stdio")
+#           (gdscript-mode "localhost" 6008))))
+# #+END_SRC
+* Tune scratch buffer
+#+BEGIN_SRC emacs-lisp
+(setq initial-major-mode 'org-mode)
+#+END_SRC
+* Org directory
+#+BEGIN_SRC elisp
+(setq org-directory "~/org/")
+#+END_SRC
+* Org preloads
+(eval-after-load "org"
+  '(require 'ox-gfm nil t))
+* Setting random banners
+#+BEGIN_SRC elisp
+(defvar banner-dirname (expand-file-name "~/.doom.d/banners/"))
+
+(defvar banner-list
+  (directory-files banner-dirname 'full (rx ".png" eos) 'sort)
+  "A list of banners for Doom Dashboard.")
+
+(defun set-random-banner ()
+  (setq fancy-splash-image
+        (nth (random (- (length banner-list) 1)) banner-list)))
+
+(add-hook 'window-configuration-change-hook #'set-random-banner)
+#+END_SRC
+* Setting transparency
+#+BEGIN_SRC elisp
+(defun transparency (value)
+  "Sets the transparency of the frame window. 0=transparent/100=opaque"
+  (interactive "nTransparency Value 0 - 100 opaque: ")
+  (dolist (frame (frame-list))
+    (set-frame-parameter frame 'alpha value)))
+#+END_SRC
+* Function to run compiler script
+#+BEGIN_SRC emacs-lisp
+(defun compiler ()
+  (interactive)
+  (save-window-excursion
+    (save-buffer)
+    (async-shell-command
+     (format "compiler %s"
+             (shell-quote-argument
+              (buffer-file-name))))))
+#+END_SRC
+* Fix special buffer detection
+#+BEGIN_SRC elisp
+(advice-add 'doom-special-buffer-p
+            :override (lambda (&rest args)
+                        (with-current-buffer (car args)
+                          (derived-mode-p 'special-mode))))
+#+END_SRC
+* Extras
+The rest of configuration is enabled with modules in the ~:personal~ section of
+~init.el~. The modules themselves are in ~modules/personal~.
+
+* Common Lisp
+#+BEGIN_SRC elisp
+(after! sly
+  (progn
+    (setq sly-complete-symbol-function 'sly-flex-completions)
+    (remove-hook 'lisp-mode-hook 'sly-editing-mode)
+    (put 'inferior-lisp-program 'safe-local-variable #'stringp)
+    (setq inferior-lisp-program "common-lisp.sh")
+    (add-hook 'sly-mrepl-mode-hook #'lispy-mode)))
+#+END_SRC
