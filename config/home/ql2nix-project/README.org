@@ -1,0 +1,99 @@
+#+TITLE: Quicklisp To Nix
+#+AUTHOR: Brad Jensen
+
+So you've got a Common Lisp project that you want to build in Nix?
+~ql2nix~ can help!  ~ql2nix~ will help you produce a nix expression
+that builds a Quicklisp bundle that contains the Common Lisp
+dependencies of your project.
+
+* Building
+The preferred way to build ~ql2nix~ is with Nix, of course!  ~ql2nix~
+includes a ~default.nix~ that builds ~ql2nix~.  Just run ~nix-build~!
+#+BEGIN_EXAMPLE
+nix-build
+#+END_EXAMPLE
+
+~ql2nix~ is also a valid ASDF system and it is set up to output an
+executable.  So, all you need to do is get ASDF to perform the
+~program-op~ on ~"ql2nix"~.  Something like this!
+
+#+BEGIN_EXAMPLE
+sbcl --eval '(require :asdf)' \
+     --eval '(let ((asdf:*central-registry* (cons (truename ".") asdf:*central-registry*)))
+               (asdf:oos (quote asdf:program-op) "ql2nix"))'
+#+END_EXAMPLE
+
+ASDF will save the executable in the usual output location -- usually
+somewhere in ~$HOME/.cache/common-lisp/~.
+
+* Usage
+#+BEGIN_EXAMPLE
+ql2nix [--quicklisp-setup path/to/quicklisp/setup.lisp] [--project-dir PATH] [--] system...
+#+END_EXAMPLE
+
+~ql2nix~ works by loading the named systems with ~ql:quickload~.  Any
+system that ASDF touches gets marked.  If that system is provided by
+your Quicklisp installation then ~ql2nix~ will include it in the
+closure.
+
+If ~ql2nix~ wasn't built with Quicklisp already loaded then you must
+provide the path to Quicklisp's ~setup.lisp~ via the
+~--quicklisp-setup~ command line argument.
+
+Any paths you specify with ~--project-dir~ will be included in ASDF's
+source registry.  Systems contained within those paths are not
+included in the closure that ~ql2nix~ produces.
+
+There are two ways you can use ~ql2nix~.  You can either have ~ql2nix~
+load your ASDF system and discover required dependencies automatically
+or you can pass in dependencies explicitly.  Either way, you must run
+~ql2nix~ in an environment where it can ~ql:quickload~ the systems
+that are named.  So, if a package depends on a native library then
+that native library must be available in the environment when you run
+~ql2nix~.  For example...
+
+#+BEGIN_EXAMPLE
+nix-shell -p someNativeDependency # if you have any!
+# Automatic dependency discovery
+ql2nix --quicklisp-setup ~/quicklisp/setup.lisp --project-dir path/to/your/source/ your-system-name
+# Explicit dependencies
+ql2nix --quicklisp-setup ~/quicklisp/setup.lisp systems-you depend-on-go here
+#+END_EXAMPLE
+
+Either way, ~ql2nix~ will output a file named ~qlDist.nix~.  This file
+describes the transitive closure of Quicklisp systems that were
+touched while loading the systems specified on the command line.
+~qlDist.nix~ can be combined with the provided ~mkNixlispBundle.nix~
+to produce a Nix derivation that contains the transitive closure of
+systems described by ~qlDist.nix~.
+
+If you're already using Nixpkgs's ~clwrapper~, then using
+~mkNixlispBundle~ is trivial.  Simply include the derivation it
+returns in your ~buildInputs~.  ~clwrapper~ will ensure that all of
+the closure's systems are included in ASDF's source registry.  For example,
+
+#+BEGIN_EXAMPLE
+{ pkgs ? import <nixpkgs> {} }:
+let
+  # Until Nixpkgs adopts mkNixlispBundle, you'll have to embed it in
+  # your project.  Details are below.
+  mkNixlispBundle = import ./nixlisp/mkNixlispBundle.nix pkgs;
+  nixlispBundle = mkNixlispBundle (import ./nixlisp/qlDist.nix);
+in
+pkgs.stdenv.mkDerivation rec {
+  name = "example";
+  buildInputs = [ nixlispBundle ];
+  # ...
+}
+#+END_EXAMPLE
+
+If you're not using ~clwrapper~, then you'll need to ~LOAD~ the file
+at ~lib/common-lisp/bundle/bundle.lisp~.  This file will configure
+ASDF so that the closure's systems are included in ASDF's source
+registry.
+
+As mentioned above, you need to use ~mkNixlispBundle~ to leverage the
+~qlDist.nix~ file produced by ~ql2nix~.  Until Nixpkgs includes
+~mkNixlispBundle~, you'll need to embed it within your project.
+~ql2nix~ will helpfully write out the supporting Nix expressions
+alongside ~qlDist.nix~ if you pass in the ~--nixlisp-lib~ flag.
